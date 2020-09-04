@@ -1,0 +1,104 @@
+module Styles = {
+  open Css;
+
+  let hFlex = style([display(`flex), alignItems(`center)]);
+
+  let withWidth = w => style([width(`px(w))]);
+
+  let topicContainer = h =>
+    style([display(`flex), alignItems(`center), width(`percent(100.)), height(`px(h))]);
+
+  let scriptContainer =
+    style([
+      fontSize(`px(12)),
+      lineHeight(`px(20)),
+      fontFamilies([
+        `custom("IBM Plex Mono"),
+        `custom("cousine"),
+        `custom("sfmono-regular"),
+        `custom("Consolas"),
+        `custom("Menlo"),
+        `custom("liberation mono"),
+        `custom("ubuntu mono"),
+        `custom("Courier"),
+        `monospace,
+      ]),
+    ]);
+
+  let padding = style([padding(`px(20))]);
+};
+
+[@react.component]
+let make = (~requestID: ID.Request.t, ~requestOpt: option(RequestSub.t)) => {
+  let (proofOpt, reload) = ProofHook.get(requestID);
+  let (showProof, setShowProof) = React.useState(_ => false);
+
+  React.useEffect1(
+    () => {
+      let intervalID =
+        Js.Global.setInterval(
+          () =>
+            if (proofOpt == None) {
+              reload((), ());
+            },
+          2000,
+        );
+      Some(() => Js.Global.clearInterval(intervalID));
+    },
+    [|proofOpt|],
+  );
+
+  switch (proofOpt) {
+  | Some(proof) =>
+    <>
+      <VSpacing size=Spacing.lg />
+      <div className={Styles.topicContainer(40)}>
+        <Col size=1.>
+          <Text
+            value="PROOF OF VALIDITY"
+            size=Text.Sm
+            weight=Text.Semibold
+            spacing={Text.Em(0.06)}
+            color=Colors.gray6
+          />
+        </Col>
+      </div>
+      <div className={Styles.topicContainer(20)}>
+        <Col size=1.>
+          <div className={Styles.withWidth(700)}>
+            <div className=Styles.hFlex>
+              <ShowProofButton showProof setShowProof />
+              <HSpacing size=Spacing.md />
+              <CopyButton data={proof.evmProofBytes} title="Copy EVM proof" width=115 />
+              <HSpacing size=Spacing.md />
+              <CopyButton
+                data={
+                  switch (requestOpt) {
+                  | Some({result: Some(_)}) =>
+                    NonEVMProof.Request(requestOpt->Belt_Option.getExn)->NonEVMProof.createProof
+                  | _ => "" |> JsBuffer.fromHex
+                  }
+                }
+                title="Copy non-EVM proof"
+                width=130
+              />
+              <HSpacing size=Spacing.md />
+              <ExtLinkButton link="https://docs.bandchain.org/" description="What is proof ?" />
+            </div>
+          </div>
+        </Col>
+      </div>
+      {showProof
+         ? <>
+             <VSpacing size=Spacing.lg />
+             <div className=Styles.scriptContainer>
+               <ReactHighlight className=Styles.padding>
+                 {proof.jsonProof |> Js.Json.stringifyWithSpace(_, 2) |> React.string}
+               </ReactHighlight>
+             </div>
+           </>
+         : React.null}
+    </>
+  | None => React.null
+  };
+};
